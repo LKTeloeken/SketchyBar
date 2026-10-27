@@ -14,6 +14,7 @@ void popup_init(struct popup* popup, struct bar_item* host) {
   popup->y_offset = 0;
   popup->adid = 0;
   popup->align = POSITION_LEFT;
+  popup->row_align = POSITION_LEFT;
   popup->blur_radius = 0;
   popup->topmost = true;
   
@@ -117,6 +118,24 @@ static void popup_calculate_popup_anchor_for_bar_item(struct popup* popup, struc
   popup_set_anchor(&bar_item->popup, anchor, popup->adid);
 }
 
+static uint32_t popup_item_width(struct bar_item* bar_item) {
+  return bar_item->background.padding_left
+         + bar_item->background.padding_right
+         + bar_item_get_length(bar_item, false);
+}
+
+static bool popup_same_row(struct bar_item* a, struct bar_item* b) {
+  return a->row && b->row && strcmp(a->row, b->row) == 0;
+}
+
+// Index one past the last item of the line starting at `start`: a run of
+// consecutive items sharing a row name, or a single item otherwise.
+static uint32_t popup_line_end(struct bar_item** items, uint32_t count, uint32_t start) {
+  uint32_t end = start + 1;
+  while (end < count && popup_same_row(items[start], items[end])) end++;
+  return end;
+}
+
 void popup_calculate_bounds(struct popup* popup, struct bar* bar) {
   uint32_t y = popup->background.border_width;
   uint32_t x = 0;
@@ -154,42 +173,88 @@ void popup_calculate_bounds(struct popup* popup, struct bar* bar) {
     }
   }
 
+  struct bar_item* visible[popup->num_items > 0 ? popup->num_items : 1];
+  uint32_t visible_count = 0;
   for (int j = 0; j < popup->num_items; j++) {
-    struct bar_item* bar_item = NULL;
-    bar_item = popup->items[j];
+    struct bar_item* bar_item = popup->items[j];
     if (!bar_item->drawing) continue;
     if (bar_item->type == BAR_COMPONENT_GROUP) continue;
+    visible[visible_count++] = bar_item;
+  }
 
-    uint32_t cell_height = max(bar_item_get_height(bar_item),
-                               popup->cell_size              );
+  // Rows only need the final popup width up front when they are not left
+  // aligned, so the widest line is measured in a first pass.
+  uint32_t content_width = width;
+  if (!popup->horizontal && popup->row_align != POSITION_LEFT) {
+    for (uint32_t start = 0; start < visible_count;) {
+      uint32_t end = popup_line_end(visible, visible_count, start);
+      uint32_t line_width = 0;
+      for (uint32_t k = start; k < end; k++)
+        line_width += popup_item_width(visible[k]);
+      if (line_width > content_width) content_width = line_width;
+      start = end;
+    }
+  }
 
-    uint32_t item_x = max((int)x + bar_item->background.padding_left, 0);
-    uint32_t item_height = popup->horizontal ? height : cell_height;
-    uint32_t item_y = item_height / 2;
+  for (uint32_t start = 0; start < visible_count;) {
+    uint32_t end = popup->horizontal
+                   ? start + 1
+                   : popup_line_end(visible, visible_count, start);
+    bool is_row = end - start > 1 || visible[start]->row;
 
-    uint32_t item_width = bar_item->background.padding_right
-                          + bar_item->background.padding_left
-                          + bar_item_calculate_bounds(bar_item,
-                                                      item_height,
-                                                      0,
-                                                      item_y      );
-
-    uint32_t bar_item_display_length = bar_item_get_length(bar_item, true);
-    if (popup->adid > 0) {
-      CGRect frame = {{popup->anchor.x + item_x,
-                       popup->anchor.y + y},
-                      {bar_item_display_length,
-                       item_height             }  };
-
-      window_set_frame(bar_item_get_window(bar_item, popup->adid), frame);
+    uint32_t line_height = 0;
+    uint32_t line_width = 0;
+    for (uint32_t k = start; k < end; k++) {
+      uint32_t cell_height = max(bar_item_get_height(visible[k]),
+                                 popup->cell_size              );
+      if (cell_height > line_height) line_height = cell_height;
+      line_width += popup_item_width(visible[k]);
     }
 
-    if (bar_item->popup.drawing)
-      popup_calculate_popup_anchor_for_bar_item(popup, bar_item, bar);
+    uint32_t line_x = x;
+    if (!popup->horizontal && is_row && content_width > line_width) {
+      if (popup->row_align == POSITION_CENTER)
+        line_x = (content_width - line_width) / 2;
+      else if (popup->row_align == POSITION_RIGHT)
+        line_x = content_width - line_width;
+    }
 
-    if (item_width > width && !popup->horizontal) width = item_width;
-    if (popup->horizontal) x += item_width;
-    else y += cell_height;
+    for (uint32_t k = start; k < end; k++) {
+      struct bar_item* bar_item = visible[k];
+      uint32_t item_x = max((int)line_x + bar_item->background.padding_left, 0);
+      uint32_t item_height = popup->horizontal ? height : line_height;
+      uint32_t item_y = item_height / 2;
+
+      uint32_t item_width = bar_item->background.padding_right
+                            + bar_item->background.padding_left
+                            + bar_item_calculate_bounds(bar_item,
+                                                        item_height,
+                                                        0,
+                                                        item_y      );
+
+      uint32_t bar_item_display_length = bar_item_get_length(bar_item, true);
+      if (popup->adid > 0) {
+        CGRect frame = {{popup->anchor.x + item_x,
+                         popup->anchor.y + y},
+                        {bar_item_display_length,
+                         item_height             }  };
+
+        window_set_frame(bar_item_get_window(bar_item, popup->adid), frame);
+      }
+
+      if (bar_item->popup.drawing)
+        popup_calculate_popup_anchor_for_bar_item(popup, bar_item, bar);
+
+      line_x += item_width;
+    }
+
+    if (popup->horizontal) {
+      x = line_x;
+    } else {
+      if (line_x > width) width = line_x;
+      y += line_height;
+    }
+    start = end;
   }
 
   for (int j = 0; j < popup->num_items; j++) {
@@ -411,13 +476,15 @@ void popup_serialize(struct popup* popup, char* indent, FILE* rsp) {
                "%s\"blur_radius\": %u,\n"
                "%s\"y_offset\": %d,\n"
                "%s\"align\": \"%s\",\n"
+               "%s\"row_align\": \"%c\",\n"
                "%s\"background\": {\n",
                indent, format_bool(popup->drawing),
                indent, format_bool(popup->horizontal),
                indent, popup->overrides_cell_size ? popup->cell_size : -1,
                indent, popup->blur_radius,
                indent, popup->y_offset,
-               indent, align, indent                                      );
+               indent, align,
+               indent, popup->row_align, indent                           );
 
   char deeper_indent[strlen(indent) + 2];
   snprintf(deeper_indent, strlen(indent) + 2, "%s\t", indent);
@@ -465,6 +532,9 @@ bool popup_parse_sub_domain(struct popup* popup, FILE* rsp, struct token propert
     return true;
   } else if (token_equals(property, PROPERTY_ALIGN)) {
     popup->align = get_token(&message).text[0];
+    return true;
+  } else if (token_equals(property, PROPERTY_ROW_ALIGN)) {
+    popup->row_align = get_token(&message).text[0];
     return true;
   } else if (token_equals(property, PROPERTY_HEIGHT)) {
     ANIMATE(popup_set_cell_size,

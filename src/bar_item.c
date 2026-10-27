@@ -33,6 +33,7 @@ void bar_item_init(struct bar_item* bar_item, struct bar_item* default_item) {
   bar_item->associated_bar = 0;
   bar_item->blur_radius = 0;
   bar_item->event_port = 0;
+  bar_item->row = NULL;
   bar_item->shadow = false;
   bar_item->scroll_texts = false;
   bar_item->mouse_over = false;
@@ -253,6 +254,28 @@ void bar_item_on_click(struct bar_item* bar_item, uint32_t type, uint32_t mouse_
                     COMMAND_SUBSCRIBE_MOUSE_CLICKED,
                     true,
                     &env_vars                       );
+
+  env_vars_destroy(&env_vars);
+}
+
+void bar_item_on_mouse_down(struct bar_item* bar_item, uint32_t type, uint32_t mouse_button_code, uint32_t modifier) {
+  if (!bar_item || !(bar_item->update_mask & UPDATE_MOUSE_PRESSED)) return;
+
+  struct env_vars env_vars;
+  env_vars_init(&env_vars);
+
+  env_vars_set(&env_vars,
+               string_copy("BUTTON"),
+               string_copy(get_type_description(type, mouse_button_code)));
+
+  env_vars_set(&env_vars,
+               string_copy("MODIFIER"),
+               string_copy(get_modifier_description(modifier)));
+
+  bar_item_update(bar_item,
+                  COMMAND_SUBSCRIBE_MOUSE_PRESSED,
+                  true,
+                  &env_vars                       );
 
   env_vars_destroy(&env_vars);
 }
@@ -804,6 +827,7 @@ void bar_item_destroy(struct bar_item* bar_item, bool free_memory) {
   if (bar_item->name) free(bar_item->name);
   if (bar_item->script) free(bar_item->script);
   if (bar_item->click_script) free(bar_item->click_script);
+  if (bar_item->row) free(bar_item->row);
 
   text_destroy(&bar_item->icon);
   text_destroy(&bar_item->label);
@@ -894,6 +918,7 @@ void bar_item_serialize(struct bar_item* bar_item, FILE* rsp) {
                "\t\t\"padding_right\": %d,\n"
                "\t\t\"scroll_texts\": \"%s\",\n"
                "\t\t\"width\": %d,\n"
+               "\t\t\"row\": \"%s\",\n"
                "\t\t\"background\": {\n",
                bar_item->name,
                type,
@@ -906,7 +931,8 @@ void bar_item_serialize(struct bar_item* bar_item, FILE* rsp) {
                bar_item->background.padding_left,
                bar_item->background.padding_right,
                format_bool(bar_item->scroll_texts),
-               bar_item->has_const_width ? bar_item->custom_width : -1);
+               bar_item->has_const_width ? bar_item->custom_width : -1,
+               bar_item->row ? bar_item->row : "");
 
   background_serialize(&bar_item->background, "\t\t\t", rsp, true);
   fprintf(rsp, "\n\t\t}\n\t},\n");
@@ -1216,6 +1242,14 @@ void bar_item_parse_set_message(struct bar_item* bar_item, char* message, FILE* 
       }
       needs_refresh = true;
     }
+  } else if (token_equals(property, PROPERTY_ROW)) {
+    struct token token = get_token(&message);
+    if (bar_item->row) free(bar_item->row);
+    bar_item->row = (token.text && token.length > 0)
+                    ? token_to_string(token)
+                    : NULL;
+    if (bar_item->parent) bar_item_needs_update(bar_item->parent);
+    needs_refresh = true;
   } else if (token_equals(property, PROPERTY_IGNORE_ASSOCIATION)) {
     bar_item->ignore_association = evaluate_boolean_state(get_token(&message),
                                                           bar_item->ignore_association);

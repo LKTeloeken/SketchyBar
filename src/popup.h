@@ -15,6 +15,7 @@ struct popup {
   bool topmost;
 
   char align;
+  char row_align;
 
   uint32_t adid;
   uint32_t cell_size;

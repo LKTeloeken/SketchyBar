@@ -102,6 +102,7 @@
 #define PROPERTY_EVENT_PORT                    "mach_helper"
 #define PROPERTY_PERCENTAGE                    "percentage"
 #define PROPERTY_MAX_CHARS                     "max_chars"
+#define PROPERTY_ROW                           "row"
 
 #define DOMAIN_BAR                             "--bar"
 #define PROPERTY_POSITION                      "position"
@@ -119,6 +120,7 @@
 #define PROPERTY_NOTCH_OFFSET                  "notch_offset"
 #define PROPERTY_NOTCH_DISPLAY_HEIGHT          "notch_display_height"
 #define PROPERTY_HORIZONTAL                    "horizontal"
+#define PROPERTY_ROW_ALIGN                     "row_align"
 
 #define DOMAIN_SUBSCRIBE                       "--subscribe"
 #define COMMAND_SUBSCRIBE_FRONT_APP_SWITCHED   "front_app_switched"
@@ -134,6 +136,7 @@
 #define COMMAND_SUBSCRIBE_MOUSE_ENTERED        "mouse.entered"
 #define COMMAND_SUBSCRIBE_MOUSE_EXITED         "mouse.exited"
 #define COMMAND_SUBSCRIBE_MOUSE_CLICKED        "mouse.clicked"
+#define COMMAND_SUBSCRIBE_MOUSE_PRESSED        "mouse.pressed"
 #define COMMAND_SUBSCRIBE_MOUSE_SCROLLED       "mouse.scrolled"
 #define COMMAND_SUBSCRIBE_MOUSE_ENTERED_GLOBAL "mouse.entered.global"
 #define COMMAND_SUBSCRIBE_MOUSE_EXITED_GLOBAL  "mouse.exited.global"

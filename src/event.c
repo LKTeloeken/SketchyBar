@@ -105,6 +105,27 @@ static void event_mouse_up(void* context) {
     bar_manager_refresh(&g_bar_manager, false);
 }
 
+static void event_mouse_down(void* context) {
+  CGPoint point = CGEventGetLocation(context);
+  uint32_t wid = get_wid_from_cg_event(context);
+  CGEventType type = CGEventGetType(context);
+  uint32_t mouse_button_code = CGEventGetIntegerValueField(context, kCGMouseEventButtonNumber);
+  uint32_t modifier_keys = CGEventGetFlags(context);
+
+  struct bar_item* bar_item = bar_manager_get_item_by_wid(&g_bar_manager,
+                                                          wid,
+                                                          NULL           );
+
+  if (!bar_item || bar_item->type == BAR_COMPONENT_GROUP) {
+    bar_item = bar_manager_get_item_by_point(&g_bar_manager, point, NULL);
+  }
+
+  bar_item_on_mouse_down(bar_item, type, mouse_button_code, modifier_keys);
+
+  if (bar_item && bar_item->needs_update)
+    bar_manager_refresh(&g_bar_manager, false);
+}
+
 static void event_mouse_dragged(void* context) {
   CGPoint point = CGEventGetLocation(context);
   uint32_t wid = get_wid_from_cg_event(context);
@@ -352,6 +373,7 @@ static callback_type* event_handler[] = {
   [DISPLAY_MOVED]              = event_display_moved,
   [DISPLAY_RESIZED]            = event_display_resized,
   [DISPLAY_CHANGED]            = event_display_changed,
+  [MOUSE_DOWN]                 = event_mouse_down,
   [MOUSE_UP]                   = event_mouse_up,
   [MOUSE_DRAGGED]              = event_mouse_dragged,
   [MOUSE_ENTERED]              = event_mouse_entered,

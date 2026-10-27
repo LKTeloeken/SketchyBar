@@ -169,10 +169,13 @@ static inline bool string_equals(const char *a, const char *b) {
 static inline char* get_type_description(uint32_t type, uint32_t mouse_button_code) {
   switch (type) {
     case kCGEventLeftMouseUp:
+    case kCGEventLeftMouseDown:
       return "left";
     case kCGEventRightMouseUp:
+    case kCGEventRightMouseDown:
       return "right";
     case kCGEventOtherMouseUp:
+    case kCGEventOtherMouseDown:
       return mouse_button_code == kCGMouseButtonCenter ? "middle" : "other";
     default:
       return "other";
